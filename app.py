@@ -205,7 +205,6 @@ HTML_TEMPLATE = """
                         resultBox.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i> Healthy Metrics: Customer is likely to Stay. (Probability: ${resData.probability}%)`;
                     }
                 } else {
-                    // Display error on screen if server processing fails
                     resultBox.style.background = 'rgba(239, 68, 68, 0.2)';
                     resultBox.style.border = '1px solid #ef4444';
                     resultBox.style.color = '#fca5a5';
@@ -234,25 +233,19 @@ def predict():
     try:
         data = request.json
         
-        # NOTE: If your pickled model was trained using raw strings via a pipeline,
-        # keep these variables as data['country'] and data['gender'].
-        # If your model expects numbers (0, 1, 2) instead, use the numeric mapping blocks below.
+        # 1. Map string categories to standard numeric encodings 
+        # (Change values here if your model used a different encoding strategy during training)
+        country_mapping = {'France': 0, 'Spain': 1, 'Germany': 2}
+        gender_mapping = {'Female': 0, 'Male': 1}
         
-        country_value = data['country']
-        gender_value = data['gender']
-        
-        # --- OPTIONAL NUMERIC MAPPING SECTION ---
-        # Uncomment this block if your model throws a "could not convert string to float" error.
-        # country_mapping = {'France': 0, 'Spain': 1, 'Germany': 2}
-        # gender_mapping = {'Female': 0, 'Male': 1}
-        # country_value = country_mapping.get(data['country'], 0)
-        # gender_value = gender_mapping.get(data['gender'], 0)
-        # ----------------------------------------
+        country_numeric = country_mapping.get(data['country'], 0)
+        gender_numeric = gender_mapping.get(data['gender'], 0)
 
+        # 2. Build explicit feature payload 
         input_data = {
             'credit_score': float(data['credit_score']),
-            'country': country_value,
-            'gender': gender_value,
+            'country': country_numeric,
+            'gender': gender_numeric,
             'age': int(data['age']),
             'tenure': int(data['tenure']),
             'balance': float(data['balance']),
@@ -262,20 +255,20 @@ def predict():
             'estimated_salary': float(data['estimated_salary'])
         }
 
-        # Structure input into a unified pandas row dataframe 
+        # 3. Restructure payload into standard pandas row matching your exact model features
         df = pd.DataFrame([input_data], columns=FEATURE_NAMES)
         
-        # Predict Class & Probability Matrix
+        # 4. Generate Machine Learning Target Predictions & Confidence Matrix
         prediction = int(model.predict(df)[0])
         
-        # Check if the model supports probability estimation
         if hasattr(model, "predict_proba"):
             probabilities = model.predict_proba(df)[0]
             confidence = round(float(probabilities[prediction]) * 100, 2)
         else:
-            confidence = 100.0  # fallback if model doesn't support predict_proba
+            confidence = 100.0
 
         return jsonify({'success': True, 'prediction': prediction, 'probability': confidence})
+        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
