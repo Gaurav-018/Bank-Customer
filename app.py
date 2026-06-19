@@ -2,7 +2,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-from flask import Flask, request, render_form, render_template_string, jsonify
+from flask import Flask, request, render_template, render_template_string, jsonify
 
 app = Flask(__name__)
 
