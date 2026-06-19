@@ -2,7 +2,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-from flask import Flask, request, render_template, render_template_string, jsonify
+from flask import Flask, request, render_template_string, jsonify
 
 app = Flask(__name__)
 
@@ -109,8 +109,8 @@ HTML_TEMPLATE = """
                                     <label class="form-label">Geography / Country</label>
                                     <select class="form-select" name="country" required>
                                         <option value="France">France</option>
-                                        <option value="Spain">Germany</option>
-                                        <option value="Germany">Spain</option>
+                                        <option value="Germany">Germany</option>
+                                        <option value="Spain">Spain</option>
                                     </select>
                                 </div>
                                 <div class="mb-3">
@@ -191,22 +191,33 @@ HTML_TEMPLATE = """
                 });
                 const resData = await response.json();
                 
+                resultBox.style.display = 'block';
                 if(resData.success) {
-                    resultBox.style.display = 'block';
                     if (resData.prediction === 1) {
                         resultBox.style.background = 'rgba(239, 68, 68, 0.2)';
                         resultBox.style.border = '1px solid #ef4444';
                         resultBox.style.color = '#fca5a5';
-                        resultBox.innerHTML = `<id class="bi bi-exclamation-triangle-fill me-2"></id> High Risk Alert: Customer is likely to Churn! (Probability: ${resData.probability}%)`;
+                        resultBox.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i> High Risk Alert: Customer is likely to Churn! (Probability: ${resData.probability}%)`;
                     } else {
                         resultBox.style.background = 'rgba(34, 197, 94, 0.2)';
                         resultBox.style.border = '1px solid #22c55e';
                         resultBox.style.color = '#86efac';
-                        resultBox.innerHTML = `<id class="bi bi-check-circle-fill me-2"></id> Healthy Metrics: Customer is likely to Stay. (Probability: ${resData.probability}%)`;
+                        resultBox.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i> Healthy Metrics: Customer is likely to Stay. (Probability: ${resData.probability}%)`;
                     }
+                } else {
+                    // Display error on screen if server processing fails
+                    resultBox.style.background = 'rgba(239, 68, 68, 0.2)';
+                    resultBox.style.border = '1px solid #ef4444';
+                    resultBox.style.color = '#fca5a5';
+                    resultBox.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i> Error: ${resData.error}`;
                 }
             } catch (err) {
                 console.error(err);
+                resultBox.style.display = 'block';
+                resultBox.style.background = 'rgba(239, 68, 68, 0.2)';
+                resultBox.style.border = '1px solid #ef4444';
+                resultBox.style.color = '#fca5a5';
+                resultBox.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i> Failed to connect to server.`;
             }
         });
     </script>
@@ -223,12 +234,25 @@ def predict():
     try:
         data = request.json
         
-        # Format mapping inputs explicitly to match string categories if label-encoded / expected by model
-        # Adjust if your pipeline expects numeric inputs for string categories
+        # NOTE: If your pickled model was trained using raw strings via a pipeline,
+        # keep these variables as data['country'] and data['gender'].
+        # If your model expects numbers (0, 1, 2) instead, use the numeric mapping blocks below.
+        
+        country_value = data['country']
+        gender_value = data['gender']
+        
+        # --- OPTIONAL NUMERIC MAPPING SECTION ---
+        # Uncomment this block if your model throws a "could not convert string to float" error.
+        # country_mapping = {'France': 0, 'Spain': 1, 'Germany': 2}
+        # gender_mapping = {'Female': 0, 'Male': 1}
+        # country_value = country_mapping.get(data['country'], 0)
+        # gender_value = gender_mapping.get(data['gender'], 0)
+        # ----------------------------------------
+
         input_data = {
             'credit_score': float(data['credit_score']),
-            'country': data['country'],
-            'gender': data['gender'],
+            'country': country_value,
+            'gender': gender_value,
             'age': int(data['age']),
             'tenure': int(data['tenure']),
             'balance': float(data['balance']),
@@ -243,8 +267,13 @@ def predict():
         
         # Predict Class & Probability Matrix
         prediction = int(model.predict(df)[0])
-        probabilities = model.predict_proba(df)[0]
-        confidence = round(float(probabilities[prediction]) * 100, 2)
+        
+        # Check if the model supports probability estimation
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba(df)[0]
+            confidence = round(float(probabilities[prediction]) * 100, 2)
+        else:
+            confidence = 100.0  # fallback if model doesn't support predict_proba
 
         return jsonify({'success': True, 'prediction': prediction, 'probability': confidence})
     except Exception as e:
